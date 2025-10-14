@@ -67,3 +67,4 @@ ENV/
 # Ignore any secrets / credentials
 .env
 secrets.json
+.virtual_documents
