@@ -43,9 +43,10 @@ class LinearRegression:
                 self.weights -= learning_rate * dw
                 self.bias -= learning_rate * db
 
-                if epoch % 10 == 0:
-                    loss = np.mean((y_pred - y)**2)
-                    print(f"Epoch:{epoch}, Loss:{loss:.4f}")
+                if epoch == 0:
+                    print(f"Starting Loss:{loss:.6f}")
+                elif epoch == epochs - 1:
+                    print(f"Final Loss:{loss:.6f}")
         
     def predict(self, X):
         if X.ndim == 1:

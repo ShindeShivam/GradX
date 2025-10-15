@@ -17,9 +17,6 @@ class LogisticRegression:
         if y.ndim == 1:
             y = y.reshape(-1,1)
 
-        X = X.squeeze()
-        y = y.squeeze()
-
         n_samples, n_features = X.shape
         # Initialize Parameters
         self.weights = np.zeros(n_features)

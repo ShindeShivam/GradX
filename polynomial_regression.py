@@ -80,6 +80,7 @@ if __name__ == "__main__":
     y = 3 * X**2 + 2 * X + 1 + np.random.randn(100) * 2
     test_X = np.array([-2, 0, 2])
     
+    
    
     model = PolynomialRegression(degree=2)
     model.fit(X, y)
