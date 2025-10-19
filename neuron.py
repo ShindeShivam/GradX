@@ -34,7 +34,7 @@ class Neuron:
         dL_db = np.sum(dL_dz)
         return dL_dw, dL_db
 if __name__ == "__main__":
-    # np.random.seed(42)
+    np.random.seed(42)
 
     X = np.array([0.5, 0.3]) # Single training example
     y = 1.0
