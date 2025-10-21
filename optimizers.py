@@ -117,6 +117,98 @@ class AdaGrad(Optimizer):
         return weights, biases 
 
 
-        
-        
+class RMSProp(Optimizer):
+    """
+    RMSprop: Adapts learning rate per parameter
+    
+    s = β*s + (1-β)*∇w²
+    w = w - lr * ∇w / (√s + ε)
+    
+    Divides gradient by running average of its magnitude
+    """
+    def __init__(self, learning_rate=0.01, decay_rate=0.9, epsilon=1e-8):
+        super().__init__(learning_rate)
+        self.decay_rate = decay_rate
+        self.epsilon = epsilon
+        self.cache_w = None
+        self.cache_b = None
 
+    def update(self, weights, biases, dW, dB):
+        # Initialize cache on first call
+        if self.cache_w is None:
+            self.cache_w = [np.zeros_like(w) for w in weights]
+            self.cache_b = [np.zeros_like(b) for b in biases]
+        
+        for i in range(len(weights)):
+            # Accumulate squared gradients
+            self.cache_w[i] = self.decay_rate * self.cache_w[i] + (1 - self.decay_rate) * dW[i] ** 2
+            self.cache_b[i] = self.decay_rate * self.cache_b[i] + (1 - self.decay_rate) * dB[i] ** 2
+
+            # Adaptive learning rate update
+            weights[i] -= self.learning_rate * dW[i] / (np.sqrt(self.cache_w[i]) + self.epsilon)
+            biases[i] -= self.learning_rate * dB[i] / (np.sqrt(self.cache_b[i]) + self.epsilon)
+        
+        return weights, biases
+
+        
+class Adam(Optimizer):
+    """
+    Adam: Adaptive Moment Estimation 
+    
+    Combines Momentum + RMSprop:
+    - Momentum: Uses moving average of gradients
+    - RMSprop: Uses moving average of squared gradients
+    
+    m = β1*m + (1-β1)*∇w        (first moment - mean)
+    v = β2*v + (1-β2)*∇w²        (second moment - variance)
+    
+    m_hat = m / (1-β1^t)         (bias correction)
+    v_hat = v / (1-β2^t)
+    
+    w = w - lr * m_hat / (√v_hat + ε)
+    
+    Default: β1=0.9, β2=0.999, lr=0.001
+    """
+    def __init__(self, learning_rate=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8):
+        super().__init__(learning_rate)
+        self.learning_rate = learning_rate
+        self.beta1 = beta1
+        self.beta2 = beta2
+        self.epsilon = epsilon
+        # First moment (momentum)
+        self.m_w = None
+        self.m_b = None
+        # Second moment(RMSprop)
+        self.v_w = None
+        self.v_b = None
+
+        self.t = 0
+
+    def update(self, weights, biases, dW, dB):
+        # Initialize moments on first call
+        if self.m_w is None:
+            self.m_w = [np.zeros_like(w) for w in weights]
+            self.m_b = [np.zeros_like(b) for b in biases]
+            self.v_w = [np.zeros_like(w) for w in weights]
+            self.v_b = [np.zeros_like(b) for b in biases]
+        
+        self.t += 1
+        for i in range(len(weights)):
+            # Update biased first moment (momentum)
+            self.m_w[i] = self.beta1 * self.m_w[i] + (1 - self.beta1) * dW[i]
+            self.m_b[i] = self.beta1 * self.m_b[i] + (1 - self.beta1) * dB[i]
+            # Update biased second moment (RMSprop)
+            self.v_w[i] = self.beta2 * self.v_w[i] + (1 - self.beta2) * dW[i]**2
+            self.v_b[i] = self.beta2 * self.v_b[i] + (1 - self.beta2) * dB[i]**2
+
+            # Bias correction (important for early iterations!)
+            m_w_hat = self.m_w[i] / (1 - self.beta1**self.t)
+            m_b_hat = self.m_b[i] / (1 - self.beta1**self.t)
+            v_w_hat = self.v_w[i] / (1 - self.beta2**self.t)
+            v_b_hat = self.v_b[i] / (1 - self.beta2**self.t)
+
+            # Update parameters
+            weights[i] -= self.learning_rate * m_w_hat / (np.sqrt(v_w_hat) + self.epsilon)
+            biases[i] -= self.learning_rate * m_b_hat / (np.sqrt(v_b_hat) + self.epsilon)
+            
+        return weights, biases
