@@ -1,4 +1,5 @@
 import numpy as np
+from optimizers import SGD, Momentum, AdaGrad, RMSProp, Adam, AdaMax, NAdam, AdamW
 
 class NeuralNetwork:
     """
@@ -8,7 +9,7 @@ class NeuralNetwork:
     Training: Gradient descent with backpropagation
     """
     
-    def __init__(self, layer_sizes, activation='relu'):
+    def __init__(self, layer_sizes, activation='relu', optimizer='adam'):
         """
         Initialize neural network with specified architecture
         
@@ -36,6 +37,33 @@ class NeuralNetwork:
         # Storage for forward pass values (needed for backpropagation)
         self.z_values = []  # Linear outputs: z = W·a + b
         self.a_values = []  # Activations: a = activation(z)
+
+        # Initiliaze optimizer
+        self.optimizer = self._create_optimizer(optimizer)
+
+    def _create_optimizer(self, optimizer_name):
+        
+        if optimizer_name == 'sgd':
+            return SGD(learning_rate=0.01)
+        elif optimizer_name == 'momentum':
+            return Momentum(learning_rate=0.01, momentum=0.9)
+        elif optimizer_name == 'adagrad':
+            return AdaGrad(learning_rate=0.01)
+        elif optimizer_name == 'rmsprop':
+            return RMSProp(learning_rate=0.001, decay_rate=0.9)
+        elif optimizer_name == 'adam':
+            return Adam(learning_rate=0.001, beta1=0.9, beta2=0.999)
+        elif optimizer_name == 'adamax':
+            return AdaMax(learning_rate=0.01)
+        elif optimizer_name == 'nadam':
+            return NAdam(learning_rate=0.01)
+        elif optimizer_name == 'adamw':
+            return AdamW(learning_rate=0.01)
+        
+        else:
+            raise ValueError(f"Unknown optimizer: {optimizer_name}")
+    
+    
     
     # ==================== Activation Functions ====================
     
@@ -126,7 +154,7 @@ class NeuralNetwork:
     
     # ==================== Backward Propagation ====================
     
-    def backward(self, X, y, learning_rate):
+    def backward(self, X, y):
         """
         Backward pass: Compute gradients and update weights
         
@@ -158,10 +186,7 @@ class NeuralNetwork:
                 da = dz @ self.weights[i].T              # Gradient w.r.t activation
                 dz = da * self.activate_derivative(self.z_values[i-1])  # Chain rule
         
-        # Update weights and biases using gradient descent
-        for i in range(self.num_layers - 1):
-            self.weights[i] -= learning_rate * dW[i]
-            self.biases[i] -= learning_rate * dB[i]
+        return dW, dB
     
     # ==================== Training & Prediction ====================
     
@@ -180,7 +205,7 @@ class NeuralNetwork:
             X = X.reshape(-1, 1)
         if y.ndim == 1:
             y = y.reshape(-1, 1)
-        
+        self.optimizer.learning_rate = learning_rate
         for epoch in range(epochs):
             # Forward pass
             y_pred = self.forward(X)
@@ -190,10 +215,12 @@ class NeuralNetwork:
             loss = -np.mean(y * np.log(y_clipped) + (1 - y) * np.log(1 - y_clipped))
             
             # Backward pass
-            self.backward(X, y, learning_rate)
-            
+            dW, dB = self.backward(X, y)
+            self.weights, self.biases = self.optimizer.update(
+                self.weights, self.biases, dW, dB
+            )
             # Print progress
-            if verbose and epoch % 100 == 0:
+            if verbose and epoch % 10 == 0:
                 accuracy = np.mean((y_pred > 0.5).astype(int) == y)
                 print(f"Epoch {epoch:4d} | Loss: {loss:.6f} | Accuracy: {accuracy:.4f}")
     
