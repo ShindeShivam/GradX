@@ -9,7 +9,7 @@ class NeuralNetwork:
     Training: Gradient descent with backpropagation
     """
     
-    def __init__(self, layer_sizes, activation='relu', optimizer='adam'):
+    def __init__(self, layer_sizes, activation='relu', optimizer='adam', dropout=0):
         """
         Initialize neural network with specified architecture
         
@@ -21,6 +21,8 @@ class NeuralNetwork:
         self.layer_sizes = layer_sizes
         self.num_layers = len(layer_sizes)
         self.activation_name = activation
+        self.dropout_rate = dropout
+        self.training_mode = True
         
         # Initialize weights and biases for each layer
         self.weights = []
@@ -37,6 +39,7 @@ class NeuralNetwork:
         # Storage for forward pass values (needed for backpropagation)
         self.z_values = []  # Linear outputs: z = W·a + b
         self.a_values = []  # Activations: a = activation(z)
+        self.dropout_mask = []
 
         # Initiliaze optimizer
         self.optimizer = self._create_optimizer(optimizer)
@@ -62,9 +65,7 @@ class NeuralNetwork:
         
         else:
             raise ValueError(f"Unknown optimizer: {optimizer_name}")
-    
-    
-    
+
     # ==================== Activation Functions ====================
     
     def relu(self, z):
@@ -118,6 +119,18 @@ class NeuralNetwork:
             return self.tanh_derivative(z)
         else:
             return np.ones_like(z)
+        
+    def _create_batches(self, X, y, batch_size, shuffle=True):
+        n_samples = X.shape[0]
+        indices = np.arange(n_samples)
+        if shuffle:
+            np.random.shuffle(indices)
+        batches = []
+        for start_idx in range(0, n_samples, batch_size):
+            end_idx = min(start_idx + batch_size, n_samples)
+            batch_indices = indices[start_idx:end_idx]
+            batches.append((X[batch_indices], y[batch_indices]))
+        return batches
     
     # ==================== Forward Propagation ====================
     
@@ -135,6 +148,7 @@ class NeuralNetwork:
         """
         self.z_values = []
         self.a_values = [X]  # First activation is input itself
+        self.dropout_mask = []
         
         a = X
         for i in range(self.num_layers - 1):
@@ -145,7 +159,14 @@ class NeuralNetwork:
             # Apply activation function
             if i < self.num_layers - 2:  # Hidden layers
                 a = self.activate(z)
-            else:                         # Output layer
+                if self.training_mode and self.dropout_rate > 0:
+                    mask = np.random.binomial(1, 1 - self.dropout_rate, size=a.shape)
+                    a = (a * mask) / (1 - self.dropout_rate) # Scale by (1 / (1 - dropout_rate)) to maintain expected value
+                    self.dropout_mask.append(mask)
+                else:
+                    self.dropout_mask.append(None)
+
+            else:          # Output layer
                 a = self.softmax(z)
             
             self.a_values.append(a)
@@ -185,12 +206,14 @@ class NeuralNetwork:
             if i > 0:
                 da = dz @ self.weights[i].T              # Gradient w.r.t activation
                 dz = da * self.activate_derivative(self.z_values[i-1])  # Chain rule
+                if self.dropout_mask[i-1] is not None:
+                    dz = (dz * self.dropout_mask[i-1]) / (1 - self.dropout_rate)
         
         return dW, dB
     
     # ==================== Training & Prediction ====================
     
-    def fit(self, X, y, learning_rate=0.01, epochs=100, verbose=True):
+    def fit(self, X, y, learning_rate=0.01, batch_size=32, epochs=100, verbose=True):
         """
         Train the neural network
         
@@ -206,23 +229,46 @@ class NeuralNetwork:
         if y.ndim == 1:
             y = y.reshape(-1, 1)
         self.optimizer.learning_rate = learning_rate
+        n_samples = X.shape[0]
         for epoch in range(epochs):
-            # Forward pass
-            y_pred = self.forward(X)
+            if verbose:
+                print(f"Epoch {epoch+1}/{epochs}")
+            if batch_size is None:
+                batches = [(X,y)]
+            else:
+                batches = self._create_batches(X, y, batch_size)
+            total_loss = 0
+            epoch_correct = 0
+            for idx, (X_batch, y_batch) in enumerate(batches):
+                # Forward pass
+                y_pred = self.forward(X_batch)
             
-            # Compute loss (cross-entropy)
-            y_clipped = np.clip(y_pred, 1e-7, 1 - 1e-7)
-            loss = -np.mean(y * np.log(y_clipped) + (1 - y) * np.log(1 - y_clipped))
-            
-            # Backward pass
-            dW, dB = self.backward(X, y)
-            self.weights, self.biases = self.optimizer.update(
+                # Compute loss (cross-entropy)
+                y_clipped = np.clip(y_pred, 1e-7, 1 - 1e-7)
+                loss = -np.mean(y_batch * np.log(y_clipped) + (1 - y_batch) * np.log(1 - y_clipped))
+                total_loss += loss
+                # Compute accuracy
+                batch_correct = np.sum((y_pred > 0.5).astype(int) == y_batch)
+                epoch_correct += batch_correct
+
+                # Backward pass
+                dW, dB = self.backward(X_batch, y_batch)
+                self.weights, self.biases = self.optimizer.update(
                 self.weights, self.biases, dW, dB
-            )
+                )
+                if verbose:
+                    print(f"\rBatch {idx+1}/{len(batches)} | Loss: {loss:.4f}", end="")
+            total_loss /= n_samples
+            epoch_accuracy = epoch_correct / (n_samples * y.shape[1])
             # Print progress
-            if verbose and epoch % 10 == 0:
-                accuracy = np.mean((y_pred > 0.5).astype(int) == y)
-                print(f"Epoch {epoch:4d} | Loss: {loss:.6f} | Accuracy: {accuracy:.4f}")
+            if verbose:
+                print(f" | Avg Loss: {total_loss:.6f} | Accuracy: {epoch_accuracy:.4f}")
+    
+    def train(self):
+        self.training_mode = True
+    
+    def eval(self):
+        self.training_mode = False
     
     def predict_proba(self, X):
         """Return probability predictions"""
@@ -234,3 +280,5 @@ class NeuralNetwork:
         """Return binary class predictions"""
         proba = self.predict_proba(X)
         return (proba > threshold).astype(int)
+    
+    
