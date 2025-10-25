@@ -46,25 +46,19 @@ class NeuralNetwork:
 
     def _create_optimizer(self, optimizer_name):
         
-        if optimizer_name == 'sgd':
-            return SGD(learning_rate=0.01)
-        elif optimizer_name == 'momentum':
-            return Momentum(learning_rate=0.01, momentum=0.9)
-        elif optimizer_name == 'adagrad':
-            return AdaGrad(learning_rate=0.01)
-        elif optimizer_name == 'rmsprop':
-            return RMSProp(learning_rate=0.001, decay_rate=0.9)
-        elif optimizer_name == 'adam':
-            return Adam(learning_rate=0.001, beta1=0.9, beta2=0.999)
-        elif optimizer_name == 'adamax':
-            return AdaMax(learning_rate=0.01)
-        elif optimizer_name == 'nadam':
-            return NAdam(learning_rate=0.01)
-        elif optimizer_name == 'adamw':
-            return AdamW(learning_rate=0.01)
-        
-        else:
-            raise ValueError(f"Unknown optimizer: {optimizer_name}")
+        optimizers = {
+            'sgd': SGD(learning_rate=0.01),
+            'momentum': Momentum(learning_rate=0.01, momentum=0.9),
+            'adagrad': AdaGrad(learning_rate=0.01),
+            'rmsprop': RMSProp(learning_rate=0.001, decay_rate=0.9),
+            'adam': Adam(learning_rate=0.001, beta1=0.9, beta2=0.999),
+            'adamax': AdaMax(learning_rate=0.002),
+            'nadam': NAdam(learning_rate=0.001),
+            'adamw': AdamW(learning_rate=0.001, weight_decay=0.01)
+        }
+        if optimizer_name not in optimizers:
+            raise ValueError(f"Unknown optimizer: {optimizer_name}. Choose from {list(optimizers.keys())}")
+        return optimizers[optimizer_name]
 
     # ==================== Activation Functions ====================
     
@@ -237,7 +231,7 @@ class NeuralNetwork:
                 batches = [(X,y)]
             else:
                 batches = self._create_batches(X, y, batch_size)
-            total_loss = 0
+            epoch_loss = 0
             epoch_correct = 0
             for idx, (X_batch, y_batch) in enumerate(batches):
                 # Forward pass
@@ -245,10 +239,12 @@ class NeuralNetwork:
             
                 # Compute loss (cross-entropy)
                 y_clipped = np.clip(y_pred, 1e-7, 1 - 1e-7)
-                loss = -np.mean(y_batch * np.log(y_clipped) + (1 - y_batch) * np.log(1 - y_clipped))
-                total_loss += loss
+                batch_loss = -np.mean(y_batch * np.log(y_clipped) + (1 - y_batch) * np.log(1 - y_clipped))
+                epoch_loss += batch_loss * X_batch.shape[0]
                 # Compute accuracy
-                batch_correct = np.sum((y_pred > 0.5).astype(int) == y_batch)
+                predictions = np.argmax(y_pred, axis=1)
+                targets = np.argmax(y_batch, axis=1)
+                batch_correct = np.sum(predictions == targets)
                 epoch_correct += batch_correct
 
                 # Backward pass
@@ -257,12 +253,14 @@ class NeuralNetwork:
                 self.weights, self.biases, dW, dB
                 )
                 if verbose:
-                    print(f"\rBatch {idx+1}/{len(batches)} | Loss: {loss:.4f}", end="")
-            total_loss /= n_samples
-            epoch_accuracy = epoch_correct / (n_samples * y.shape[1])
+                    print(f"\rBatch {idx+1}/{len(batches)} | Loss: {batch_loss:.4f}", end="")
+                
+            avg_loss = epoch_loss / n_samples
+            accuracy = epoch_correct / n_samples
+            
             # Print progress
             if verbose:
-                print(f" | Avg Loss: {total_loss:.6f} | Accuracy: {epoch_accuracy:.4f}")
+                print(f" | Avg Loss: {avg_loss:.6f} | Accuracy: {accuracy:.4f}")
     
     def train(self):
         self.training_mode = True
