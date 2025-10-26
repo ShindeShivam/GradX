@@ -149,3 +149,66 @@ class Sequential(Module):
     def __len__(self):
         return len(self.layers)
     
+    
+class ReLU(Module):
+    def __init__(self):
+        super().__init__()
+        self.input = None
+    
+    def forward(self, x):
+        self.input = x
+        return np.maximum(0, x)
+    
+    def backward(self, grad_output):
+        return grad_output * (self.input > 0).astype(float)
+    
+    def __repr__(self):
+        return "ReLU()"
+    
+class Sigmoid(Module):
+    def __init__(self):
+        super().__init__()
+        self.output = None
+
+    def forward(self, x):
+        self.output = 1 / (1 + np.exp(-np.clip(x, -500, 500)))
+        return self.output
+    
+    def backward(self, grad_output):
+        return grad_output * self.output * (1 - self.output)
+
+class Tanh(Module):
+    def __init__(self):
+        super().__init__()
+        self.output = None
+    
+    def forward(self, x):
+        self.output = np.tanh(x)
+    
+    def backward(self, grad_output):
+        return grad_output * (1 - self.output ** 2)
+
+class Dropout(Module):
+    def __init__(self, p=0.2):
+        super().__init__()
+        self.p = p
+        self.mask = None #Store mask for backward pass
+    
+    def forward(self, x):
+        """Apply dropout and store mask"""
+        if self.training and self.p > 0:
+            self.mask = np.random.binomial(1, 1 - self.p, size=x.shape)
+            return (x * self.mask) / (1 - self.p)
+        else:
+            self.mask = None
+            return x
+        
+    def backward(self, grad_output):
+        """Use stored mask for gradient"""
+        if self.training and self.p > 0 and self.mask is not None:
+            return (grad_output * self.mask) / (1 - self.p)
+        else:
+            return grad_output
+    def __repr__(self):
+        return f"Drpout(p={self.p})"
+        

@@ -20,7 +20,8 @@ class SGD(Optimizer):
     def update(self, weights, biases, dW, dB):
         for i in range(len(weights)):
             weights[i] -= self.learning_rate * dW[i]
-            biases[i] -= self.learning_rate * dB[i]
+            if biases is not None and biases[i] is not None:
+                biases[i] -= self.learning_rate * dB[i]
         return weights, biases
 
 class Momentum(Optimizer):
@@ -48,9 +49,12 @@ class Momentum(Optimizer):
         # Update velocity and weights
         for i in range(len(weights)):
             self.velocity_w[i] = self.momentum * self.velocity_w[i] + dW[i]
-            self.velocity_b[i] = self.momentum * self.velocity_b[i] + dB[i]
             weights[i] -= self.learning_rate * self.velocity_w[i]
-            biases[i] -= self.learning_rate * self.velocity_b[i]
+            if biases is not None and biases[i] is not None:
+                self.velocity_b[i] = self.momentum * self.velocity_b[i] + dB[i]
+                biases[i] -= self.learning_rate * self.velocity_b[i]
+            
+            
 
         return weights, biases
 
@@ -80,12 +84,12 @@ class AdaGrad(Optimizer):
         for i in range(len(weights)):
             # Accumulate squared gradients 
             self.cache_w[i] += dW[i] ** 2
-            self.cache_b[i] += dB[i] ** 2
+            weights[i] -= self.learning_rate * dW[i] / (np.sqrt(self.cache_w[i]) + self.epsilon) # Adaptive learning rate
 
-            # Adaptive learning rate
-            weights[i] -= self.learning_rate * dW[i] / (np.sqrt(self.cache_w[i]) + self.epsilon)
-            biases[i] -= self.learning_rate * dB[i] / (np.sqrt(self.cache_b[i]) + self.epsilon)
-
+            if biases is not None and biases[i] is not None:
+                self.cache_b[i] += dB[i] ** 2
+                biases[i] -= self.learning_rate * dB[i] / (np.sqrt(self.cache_b[i]) + self.epsilon) # Adaptive learning rate
+  
         return weights, biases 
 
 
@@ -114,12 +118,11 @@ class RMSProp(Optimizer):
         for i in range(len(weights)):
             # Accumulate squared gradients
             self.cache_w[i] = self.decay_rate * self.cache_w[i] + (1 - self.decay_rate) * dW[i] ** 2
-            self.cache_b[i] = self.decay_rate * self.cache_b[i] + (1 - self.decay_rate) * dB[i] ** 2
-
-            # Adaptive learning rate update
             weights[i] -= self.learning_rate * dW[i] / (np.sqrt(self.cache_w[i]) + self.epsilon)
-            biases[i] -= self.learning_rate * dB[i] / (np.sqrt(self.cache_b[i]) + self.epsilon)
-        
+
+            if biases is not None and biases[i] is not None:
+                self.cache_b[i] = self.decay_rate * self.cache_b[i] + (1 - self.decay_rate) * dB[i] ** 2
+                biases[i] -= self.learning_rate * dB[i] / (np.sqrt(self.cache_b[i]) + self.epsilon)
         return weights, biases
 
         
@@ -156,34 +159,81 @@ class Adam(Optimizer):
 
         self.t = 0
 
+    # def update(self, weights, biases, dW, dB):
+    #     # Initialize moments on first call
+    #     if self.m_w is None:
+    #         self.m_w = [np.zeros_like(w) for w in weights]
+    #         self.v_w = [np.zeros_like(w) for w in weights]
+    
+    
+    #         if biases is not None:
+    #             self.m_b = [np.zeros_like(b) if b is not None else None for b in biases]
+    #             self.v_b = [np.zeros_like(b) if b is not None else None for b in biases]
+    #         else:
+    #             self.m_b = None
+    #             self.v_b = None
+        
+    #     self.t += 1
+    #     for i in range(len(weights)):
+    #         # Update biased first moment (momentum)
+    #         self.m_w[i] = self.beta1 * self.m_w[i] + (1 - self.beta1) * dW[i]
+    #         # Update biased second moment (RMSprop)
+    #         self.v_w[i] = self.beta2 * self.v_w[i] + (1 - self.beta2) * dW[i]**2
+            
+    #         if biases is not None and biases[i] is not None:
+    #             self.m_b[i] = self.beta1 * self.m_b[i] + (1 - self.beta1) * dB[i]
+    #             self.v_b[i] = self.beta2 * self.v_b[i] + (1 - self.beta2) * dB[i]**2
+    #             m_b_hat = self.m_b[i] / (1 - self.beta1**self.t)  # Bias correction
+    #             v_b_hat = self.v_b[i] / (1 - self.beta2**self.t)   # Bias correction
+    #             biases[i] -= self.learning_rate * m_b_hat / (np.sqrt(v_b_hat) + self.epsilon) # Update parameters
+            
+
+    #         # Bias correction (important for early iterations!)
+    #         m_w_hat = self.m_w[i] / (1 - self.beta1**self.t)
+    #         v_w_hat = self.v_w[i] / (1 - self.beta2**self.t)
+
+    #         # Update parameters
+    #         weights[i] -= self.learning_rate * m_w_hat / (np.sqrt(v_w_hat) + self.epsilon)
+            
+            
+        # return weights, biases
     def update(self, weights, biases, dW, dB):
-        # Initialize moments on first call
+    # Initialize moments on first call
         if self.m_w is None:
             self.m_w = [np.zeros_like(w) for w in weights]
-            self.m_b = [np.zeros_like(b) for b in biases]
             self.v_w = [np.zeros_like(w) for w in weights]
-            self.v_b = [np.zeros_like(b) for b in biases]
-        
+
+            if biases is not None:
+                self.m_b = [np.zeros_like(b) if b is not None else None for b in biases]
+                self.v_b = [np.zeros_like(b) if b is not None else None for b in biases]
+            else:
+                self.m_b = None
+                self.v_b = None
+
         self.t += 1
+
         for i in range(len(weights)):
-            # Update biased first moment (momentum)
+        # Update biased first and second moments for weights
             self.m_w[i] = self.beta1 * self.m_w[i] + (1 - self.beta1) * dW[i]
-            self.m_b[i] = self.beta1 * self.m_b[i] + (1 - self.beta1) * dB[i]
-            # Update biased second moment (RMSprop)
-            self.v_w[i] = self.beta2 * self.v_w[i] + (1 - self.beta2) * dW[i]**2
-            self.v_b[i] = self.beta2 * self.v_b[i] + (1 - self.beta2) * dB[i]**2
+            self.v_w[i] = self.beta2 * self.v_w[i] + (1 - self.beta2) * (dW[i] ** 2)
 
-            # Bias correction (important for early iterations!)
-            m_w_hat = self.m_w[i] / (1 - self.beta1**self.t)
-            m_b_hat = self.m_b[i] / (1 - self.beta1**self.t)
-            v_w_hat = self.v_w[i] / (1 - self.beta2**self.t)
-            v_b_hat = self.v_b[i] / (1 - self.beta2**self.t)
-
-            # Update parameters
+        # Bias correction for weights
+            m_w_hat = self.m_w[i] / (1 - self.beta1 ** self.t)
+            v_w_hat = self.v_w[i] / (1 - self.beta2 ** self.t)
+        # Update weights
             weights[i] -= self.learning_rate * m_w_hat / (np.sqrt(v_w_hat) + self.epsilon)
-            biases[i] -= self.learning_rate * m_b_hat / (np.sqrt(v_b_hat) + self.epsilon)
-            
+
+        # Safely update biases only if both exist and lengths match
+            if biases is not None and dB is not None  and biases[i] is not None:
+                self.m_b[i] = self.beta1 * self.m_b[i] + (1 - self.beta1) * dB[i]
+                self.v_b[i] = self.beta2 * self.v_b[i] + (1 - self.beta2) * (dB[i] ** 2)
+                m_b_hat = self.m_b[i] / (1 - self.beta1 ** self.t)
+                v_b_hat = self.v_b[i] / (1 - self.beta2 ** self.t)
+                biases[i] -= self.learning_rate * m_b_hat / (np.sqrt(v_b_hat) + self.epsilon)
+
         return weights, biases
+
+
         
 
 class AdaMax(Optimizer):
@@ -216,14 +266,16 @@ class AdaMax(Optimizer):
         for i in range(len(weights)):
             # Update biased first moment (momentum)
             self.m_w[i] = self.beta1 * self.m_w[i] + (1 - self.beta1) * dW[i]
-            self.m_b[i] = self.beta1 * self.m_b[i] + (1 - self.beta1) * dB[i]
             # Update biased second moment
             self.u_w[i] = np.maximum(self.beta2 * self.u_w[i], np.abs(dW[i]))
-            self.u_b[i] = np.maximum(self.beta2 * self.u_b[i], np.abs(dB[i]))
+
+            if biases is not None and biases[i] is not None:
+                self.m_b[i] = self.beta1 * self.m_b[i] + (1 - self.beta1) * dB[i]
+                self.u_b[i] = np.maximum(self.beta2 * self.u_b[i], np.abs(dB[i]))
+                biases[i] -= (self.learning_rate) / (1- self.beta1**self.t) * self.m_b[i] / (self.u_b[i] + self.epsilon) # Update parameters
 
             # Update parameters
             weights[i] -= (self.learning_rate) / (1 - self.beta1**self.t) * self.m_w[i] / (self.u_w[i] + self.epsilon)
-            biases[i] -= (self.learning_rate) / (1- self.beta1**self.t) * self.m_b[i] / (self.u_b[i] + self.epsilon)
 
         return weights, biases
 
@@ -253,19 +305,24 @@ class NAdam(Optimizer):
         for i in range(len(weights)):
             # Update biased first moment (momentum)
             self.m_w[i] = self.beta1 * self.m_w[i] + (1 - self.beta1) * dW[i]
-            self.m_b[i] = self.beta1 * self.m_b[i] + (1 - self.beta1) * dB[i]
+            
             # Update biased second moment
             self.v_w[i] = self.beta2 * self.v_w[i] + (1 - self.beta2) * dW[i]**2
-            self.v_b[i] = self.beta2 * self.v_b[i] + (1 - self.beta2) * dB[i]**2
             # Bias correction (important for early iterations!)
             m_w_hat = self.m_w[i] / (1 - self.beta1**self.t)
-            m_b_hat = self.m_b[i] / (1 - self.beta1**self.t)
+            
             v_w_hat = self.v_w[i] / (1 - self.beta2**self.t)
-            v_b_hat = self.v_b[i] / (1 - self.beta2**self.t)
+            
+            if biases is not None and biases[i] is not None:
+                self.m_b[i] = self.beta1 * self.m_b[i] + (1 - self.beta1) * dB[i]
+                self.v_b[i] = self.beta2 * self.v_b[i] + (1 - self.beta2) * dB[i]**2
+                m_b_hat = self.m_b[i] / (1 - self.beta1**self.t)
+                v_b_hat = self.v_b[i] / (1 - self.beta2**self.t)
+                biases[i] -= (self.learning_rate / (np.sqrt(v_b_hat) + self.epsilon)) * (self.beta1 * m_b_hat + (1 - self.beta1) * dB[i] / (1 - self.beta1**self.t))  # Update parameters
 
             # Update parameters
             weights[i] -= ( self.learning_rate / (np.sqrt(v_w_hat) + self.epsilon)) * (self.beta1 * m_w_hat + (1 - self.beta1) * dW[i] / (1 - self.beta1**self.t))
-            biases[i] -= (self.learning_rate / (np.sqrt(v_b_hat) + self.epsilon)) * (self.beta1 * m_b_hat + (1 - self.beta1) * dB[i] / (1 - self.beta1**self.t))
+           
 
         return weights, biases
         
@@ -299,20 +356,24 @@ class AdamW(Optimizer):
         for i in range(len(weights)):
             # Update biased first moment (momentum)
             self.m_w[i] = self.beta1 * self.m_w[i] + (1 - self.beta1) * dW[i]
-            self.m_b[i] = self.beta1 * self.m_b[i] + (1 - self.beta1) * dB[i]
             # Update biased second moment
             self.v_w[i] = self.beta2 * self.v_w[i] + (1 - self.beta2) * dW[i]**2
-            self.v_b[i] = self.beta2 * self.v_b[i] + (1 - self.beta2) * dB[i]**2
+            
             # Bias correction (important for early iterations!)
             m_w_hat = self.m_w[i] / (1 - self.beta1**self.t)
-            m_b_hat = self.m_b[i] / (1 - self.beta1**self.t)
             v_w_hat = self.v_w[i] / (1 - self.beta2**self.t)
-            v_b_hat = self.v_b[i] / (1 - self.beta2**self.t)
 
-            # Update parameters
+            if biases is not None and biases[i] is not None:
+                self.m_b[i] = self.beta1 * self.m_b[i] + (1 - self.beta1) * dB[i]
+                self.v_b[i] = self.beta2 * self.v_b[i] + (1 - self.beta2) * dB[i]**2
+                m_b_hat = self.m_b[i] / (1 - self.beta1**self.t)
+                v_b_hat = self.v_b[i] / (1 - self.beta2**self.t)
+                biases[i] -= self.learning_rate * m_b_hat / (np.sqrt(v_b_hat) + self.epsilon)  
+
+            
             weights[i] -= self.learning_rate * m_w_hat / (np.sqrt(v_w_hat) + self.epsilon)
             weights[i] -= self.learning_rate * self.weight_decay * weights[i]
-            biases[i] -= self.learning_rate * m_b_hat / (np.sqrt(v_b_hat) + self.epsilon)
+            
         
         return weights, biases
         
