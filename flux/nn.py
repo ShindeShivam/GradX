@@ -177,6 +177,9 @@ class Sigmoid(Module):
     def backward(self, grad_output):
         return grad_output * self.output * (1 - self.output)
 
+    def __repr__(self):
+        return "Sigmoid()"
+
 class Tanh(Module):
     def __init__(self):
         super().__init__()
@@ -184,9 +187,13 @@ class Tanh(Module):
     
     def forward(self, x):
         self.output = np.tanh(x)
+        return self.output
     
     def backward(self, grad_output):
         return grad_output * (1 - self.output ** 2)
+    
+    def __repr__(self):
+        return "Tanh()"
 
 class Dropout(Module):
     def __init__(self, p=0.2):
@@ -210,5 +217,5 @@ class Dropout(Module):
         else:
             return grad_output
     def __repr__(self):
-        return f"Drpout(p={self.p})"
+        return f"Dropout(p={self.p})"
         
