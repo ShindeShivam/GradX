@@ -24,6 +24,7 @@ class LinearRegression:
         else:
             self.weights = np.zeros(n_features)
             self.bias = 0
+            y = y.squeeze()
 
             for epoch in range(epochs):
                 y_pred = X @ self.weights + self.bias
