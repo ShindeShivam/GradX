@@ -1,15 +1,17 @@
 import numpy as np
 
 class Optimizer:
-    """ Base class for all optimizers """
-
     def __init__(self, learning_rate):
         self.learning_rate = learning_rate
         self.state = {}
     
+    def _key(self, param):
+        return id(param['data'])
+
     def step(self, parameters):
         raise NotImplementedError
-    
+
+
 class SGD(Optimizer):
     """
     Basic Gradient Descent: w = w - lr * ∇w
@@ -22,6 +24,7 @@ class SGD(Optimizer):
         for param in parameters:
             if param['grad'] is not None:
                 param['data'] -= self.learning_rate * param['grad']
+
 
 class Momentum(Optimizer):
     """
@@ -38,12 +41,14 @@ class Momentum(Optimizer):
         self.momentum = momentum
     
     def step(self, parameters):
-        for i, param in enumerate(parameters):
+        for param in parameters:
             if param['grad'] is not None:
-                if i not in self.state: 
-                    self.state[i] = {'v': np.zeros_like(param['data'])}  # Initialize velocity on first call
-                self.state[i]['v'] = self.momentum * self.state[i]['v'] + param['grad'] # Update velocity
-                param['data'] -= self.learning_rate * self.state[i]['v'] # Update parameter
+                key = self._key(param)
+                if key not in self.state:
+                    self.state[key] = {'v': np.zeros_like(param['data'])}
+                self.state[key]['v'] = self.momentum * self.state[key]['v'] + param['grad']
+                param['data'] -= self.learning_rate * self.state[key]['v']
+
 
 class AdaGrad(Optimizer):
     """
@@ -60,12 +65,14 @@ class AdaGrad(Optimizer):
         self.epsilon = epsilon
     
     def step(self, parameters):
-        for i, param in enumerate(parameters):
+        for param in parameters:
             if param['grad'] is not None:
-                if i not in self.state:
-                    self.state[i] = {'cache': np.zeros_like(param['data'])}  # Initialize cache on first call
-                self.state[i]['cache'] += param['grad'] ** 2 # Accumulate squared gradients 
-                param['data'] -= self.learning_rate * param['grad'] / (np.sqrt(self.state[i]['cache']) + self.epsilon) # Adaptive update
+                key = self._key(param)
+                if key not in self.state:
+                    self.state[key] = {'cache': np.zeros_like(param['data'])}
+                self.state[key]['cache'] += param['grad'] ** 2
+                param['data'] -= self.learning_rate * param['grad'] / (np.sqrt(self.state[key]['cache']) + self.epsilon)
+
 
 class RMSProp(Optimizer):
     """
@@ -82,14 +89,15 @@ class RMSProp(Optimizer):
         self.epsilon = epsilon
     
     def step(self, parameters):
-        for i, param in enumerate(parameters):
+        for param in parameters:
             if param['grad'] is not None:
-                if i not in self.state:
-                    self.state[i] = {'cache': np.zeros_like(param['data'])} # Initialize cache on first call
-                self.state[i]['cache'] = self.decay_rate * self.state[i]['cache'] + (1 - self.decay_rate) * param['grad'] ** 2
-                param['data'] -= self.learning_rate * param['grad'] / (np.sqrt(self.state[i]['cache']) + self.epsilon)
+                key = self._key(param)
+                if key not in self.state:
+                    self.state[key] = {'cache': np.zeros_like(param['data'])}
+                self.state[key]['cache'] = self.decay_rate * self.state[key]['cache'] + (1 - self.decay_rate) * param['grad'] ** 2
+                param['data'] -= self.learning_rate * param['grad'] / (np.sqrt(self.state[key]['cache']) + self.epsilon)
 
-        
+
 class Adam(Optimizer):
     """
     Adam: Adaptive Moment Estimation 
@@ -108,9 +116,8 @@ class Adam(Optimizer):
     
     Default: β1=0.9, β2=0.999, lr=0.001
     """
-    def __init__(self, learning_rate=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8):
+    def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8):
         super().__init__(learning_rate)
-        self.learning_rate = learning_rate
         self.beta1 = beta1
         self.beta2 = beta2
         self.epsilon = epsilon
@@ -118,17 +125,18 @@ class Adam(Optimizer):
     
     def step(self, parameters):
         self.t += 1
-        for i, param in enumerate(parameters):
+        for param in parameters:
             if param['grad'] is not None:
-                if i not in self.state:  # Initialize moments
-                    self.state[i] = {
+                key = self._key(param)
+                if key not in self.state:
+                    self.state[key] = {
                         'm': np.zeros_like(param['data']),
                         'v': np.zeros_like(param['data'])
-                        }
-                self.state[i]['m'] = self.beta1 * self.state[i]['m'] + (1 - self.beta1) * param['grad']  # Update biased first moment (momentum)
-                self.state[i]['v'] = self.beta2 * self.state[i]['v'] + (1 - self.beta2) * param['grad'] ** 2 # Update biased second moment (RMSprop)
-                m_hat = self.state[i]['m'] / (1 - self.beta1 ** self.t)   # Bias correction (important for early iterations!)
-                v_hat = self.state[i]['v'] / (1 - self.beta2 ** self.t)   # Bias correction (important for early iterations!)
+                    }
+                self.state[key]['m'] = self.beta1 * self.state[key]['m'] + (1 - self.beta1) * param['grad']
+                self.state[key]['v'] = self.beta2 * self.state[key]['v'] + (1 - self.beta2) * param['grad'] ** 2
+                m_hat = self.state[key]['m'] / (1 - self.beta1 ** self.t)
+                v_hat = self.state[key]['v'] / (1 - self.beta2 ** self.t)
                 param['data'] -= self.learning_rate * m_hat / (np.sqrt(v_hat) + self.epsilon)
 
 
@@ -137,9 +145,8 @@ class AdaMax(Optimizer):
     AdaMax: Variant of Adam based on infinity norm
     Uses max norm instead of L2 norm 
     """
-    def __init__(self, learning_rate=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8):
+    def __init__(self, learning_rate=0.002, beta1=0.9, beta2=0.999, epsilon=1e-8):
         super().__init__(learning_rate)
-        self.learning_rate = learning_rate
         self.beta1 = beta1
         self.beta2 = beta2
         self.epsilon = epsilon
@@ -147,22 +154,27 @@ class AdaMax(Optimizer):
     
     def step(self, parameters):
         self.t += 1
-        for i, param in enumerate(parameters):
+        for param in parameters:
             if param['grad'] is not None:
-                if i not in self.state:
-                    self.state[i] = {
+                key = self._key(param)
+                if key not in self.state:
+                    self.state[key] = {
                         'm': np.zeros_like(param['data']),
                         'u': np.zeros_like(param['data'])
                     }
-                self.state[i]['m'] = self.beta1 * self.state[i]['m'] + (1 - self.beta1) * param['grad'] # Update first moment (momentum)
-                self.state[i]['u'] = np.maximum(self.beta2 * self.state[i]['u'], np.abs(param['grad'])) # Update infinity norm
-                param['data'] -= self.learning_rate / (1 - self.beta1 ** self.t) * self.state[i]['m'] / (self.state[i]['u'] + self.epsilon)
+                self.state[key]['m'] = self.beta1 * self.state[key]['m'] + (1 - self.beta1) * param['grad']
+                self.state[key]['u'] = np.maximum(self.beta2 * self.state[key]['u'], np.abs(param['grad']))
+                param['data'] -= (self.learning_rate / (1 - self.beta1 ** self.t)) * self.state[key]['m'] / (self.state[key]['u'] + self.epsilon)
 
 
 class NAdam(Optimizer):
-    def __init__(self, learning_rate=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8):
+    """
+    NAdam: Adam with Nesterov momentum
+    
+    Applies Nesterov lookahead to Adam's first moment estimate
+    """
+    def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8):
         super().__init__(learning_rate)
-        self.learning_rate = learning_rate
         self.beta1 = beta1
         self.beta2 = beta2
         self.epsilon = epsilon
@@ -170,29 +182,31 @@ class NAdam(Optimizer):
     
     def step(self, parameters):
         self.t += 1
-        for i, param in enumerate(parameters):
+        for param in parameters:
             if param['grad'] is not None:
-                if i not in self.state:
-                    self.state[i] = {
+                key = self._key(param)
+                if key not in self.state:
+                    self.state[key] = {
                         'm': np.zeros_like(param['data']),
                         'v': np.zeros_like(param['data'])
-                        }
-                self.state[i]['m'] = self.beta1 * self.state[i]['m'] + (1 - self.beta1) * param['grad'] # Update biased first moment (momentum)
-                self.state[i]['v'] = self.beta2 * self.state[i]['v'] + (1 - self.beta2) * param['grad'] ** 2 # Update biased second moment
-                 # Bias correction (important for early iterations!)
-                m_hat = self.state[i]['m'] / (1 - self.beta1 ** self.t)
-                v_hat = self.state[i]['v'] / (1 - self.beta2 ** self.t)
+                    }
+                self.state[key]['m'] = self.beta1 * self.state[key]['m'] + (1 - self.beta1) * param['grad']
+                self.state[key]['v'] = self.beta2 * self.state[key]['v'] + (1 - self.beta2) * param['grad'] ** 2
+                m_hat = self.state[key]['m'] / (1 - self.beta1 ** self.t)
+                v_hat = self.state[key]['v'] / (1 - self.beta2 ** self.t)
                 param['data'] -= (self.learning_rate / (np.sqrt(v_hat) + self.epsilon)) * \
                     (self.beta1 * m_hat + (1 - self.beta1) * param['grad'] / (1 - self.beta1 ** self.t))
 
 
 class AdamW(Optimizer):
     """
-    Adam + weight_decay
+    AdamW: Adam with decoupled weight decay
+    
+    Weight decay is applied directly to parameters rather than
+    being folded into the gradient, which is more principled
     """
-    def __init__(self, learning_rate=0.01, beta1=0.9, beta2=0.999, weight_decay=0.01, epsilon=1e-8):
+    def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, weight_decay=0.01, epsilon=1e-8):
         super().__init__(learning_rate)
-        self.learning_rate = learning_rate
         self.beta1 = beta1
         self.beta2 = beta2
         self.weight_decay = weight_decay
@@ -201,22 +215,19 @@ class AdamW(Optimizer):
     
     def step(self, parameters):
         self.t += 1
-        for i, param in enumerate(parameters):
+        for param in parameters:
             if param['grad'] is not None:
-                if i not in self.state:
-                    self.state[i] = {
+                key = self._key(param)
+                if key not in self.state:
+                    self.state[key] = {
                         'm': np.zeros_like(param['data']),
                         'v': np.zeros_like(param['data'])
-                        }
-                self.state[i]['m'] = self.beta1 * self.state[i]['m'] + (1 - self.beta1) * param['grad']  # Update biased first moment (momentum)
-                self.state[i]['v'] = self.beta2 * self.state[i]['v'] + (1 - self.beta2) * param['grad'] ** 2 # Update biased second moment
-                # Bias correction (important for early iterations!)
-                m_hat =  self.state[i]['m'] / (1 - self.beta1 ** self.t)
-                v_hat = self.state[i]['v'] / (1 - self.beta2 ** self.t)
-                param['data'] -= self.learning_rate * m_hat / (np.sqrt(v_hat) + self.epsilon) # Adam update
+                    }
+                self.state[key]['m'] = self.beta1 * self.state[key]['m'] + (1 - self.beta1) * param['grad']
+                self.state[key]['v'] = self.beta2 * self.state[key]['v'] + (1 - self.beta2) * param['grad'] ** 2
+                m_hat = self.state[key]['m'] / (1 - self.beta1 ** self.t)
+                v_hat = self.state[key]['v'] / (1 - self.beta2 ** self.t)
+                param['data'] -= self.learning_rate * m_hat / (np.sqrt(v_hat) + self.epsilon)
 
-                # Decoupled weight decay (applied AFTER Adam update)
-                # Not applied to biases (name check)
                 if param['name'] in ['weight', 'gamma']:
                     param['data'] -= self.learning_rate * self.weight_decay * param['data']
-
