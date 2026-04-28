@@ -49,4 +49,4 @@ model = Sequential(
 optimizer = Adam(learning_rate=0.001)
 ```
 
-See `examples.ipynb` for full training examples including MNIST.
+See `validation_and_examples.ipynb` for full training examples including MNIST.
